@@ -1,6 +1,5 @@
 package com.example.sharipov.tgbot;
 
-import org.telegram.telegrambots.bots.DefaultBotOptions;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.GetMe;
@@ -24,7 +23,7 @@ import java.util.List;
 
 /**
  * Универсальный Telegram бот с OpenRouter + SQLite история чатов.
- * 9 ПАРАМЕТРОВ из батника: BOT_TOKEN LLM_URL API_KEY MODEL NAME DESCRIPTION TEMP TOP_P HISTORY_LIMIT
+ * 10 ПАРАМЕТРОВ из батника: BOT_TOKEN LLM_URL API_KEY MODEL PROVIDER NAME DESCRIPTION TEMP TOP_P HISTORY_LIMIT
  */
 public class TgBotApplication extends TelegramLongPollingBot {
 
@@ -34,6 +33,7 @@ public class TgBotApplication extends TelegramLongPollingBot {
     private final String LLM_URL;
     private final String API_KEY;
     private final String MODEL;
+    private final String PROVIDER;  // ✅ НОВЫЙ ПАРАМЕТР
     private final String NAME;
     private final String DESCRIPTION;
     private final double TEMPERATURE;
@@ -46,7 +46,8 @@ public class TgBotApplication extends TelegramLongPollingBot {
     private PreparedStatement getMaxIndexStmt;
     private PreparedStatement deleteOldStmt;
     private Long botId;
-    public TgBotApplication(String botToken, String llmUrl, String apiKey, String model,
+
+    public TgBotApplication(String botToken, String llmUrl, String apiKey, String model, String provider,
                             String name, String description, String temp, String topP, String historyLimit) {
 
         super(botToken);  // ✅ 6.9+ синтаксис
@@ -54,6 +55,7 @@ public class TgBotApplication extends TelegramLongPollingBot {
         this.LLM_URL = requireNonNull(llmUrl, "LLM_URL");
         this.API_KEY = requireNonNull(apiKey, "API_KEY");
         this.MODEL = requireNonNull(model, "MODEL");
+        this.PROVIDER = requireNonNull(provider, "PROVIDER");  // ✅ Новый
         this.NAME = requireNonNull(name, "NAME");
         this.DESCRIPTION = requireNonNull(description, "DESCRIPTION");
         this.TEMPERATURE = parseDouble(temp, "TEMPERATURE", 0.3);
@@ -61,8 +63,9 @@ public class TgBotApplication extends TelegramLongPollingBot {
         this.HISTORY_LIMIT = parseInt(historyLimit, "HISTORY_LIMIT", 8);
 
         System.out.println("🔥 Инициализация...");
+        System.out.println("🤖 Модель: " + MODEL + " @ " + PROVIDER);  // ✅ Лог
         initDatabase();
-        clearAllHistory();
+//        clearAllHistory();
 
         // ✅ РЕГИСТРАЦИЯ И ЗАПУСК (6.9.7)
         try {
@@ -209,9 +212,18 @@ public class TgBotApplication extends TelegramLongPollingBot {
             req.addProperty("stream", false);
 
             JsonObject options = new JsonObject();
-            options.addProperty("temperature", TEMPERATURE);  // ✅ ИЗ ПАРАМЕТРА
-            options.addProperty("top_p", TOP_P);              // ✅ ИЗ ПАРАМЕТРА
+            options.addProperty("temperature", TEMPERATURE);
+            options.addProperty("top_p", TOP_P);
             req.add("options", options);
+
+            // ✅ PROVIDER РОУТИНГ
+            if (!PROVIDER.isEmpty()) {
+                JsonObject providerObj = new JsonObject();
+                JsonArray providerArray = new JsonArray();
+                providerArray.add(PROVIDER);  // "atlas-cloud"
+                providerObj.add("only", providerArray);
+                req.add("provider", providerObj);
+            }
 
             // ✅ ЛОГИ ДЛЯ ДЕБАГА
             System.out.println("📤 REQUEST:");
@@ -222,6 +234,8 @@ public class TgBotApplication extends TelegramLongPollingBot {
                     .uri(URI.create(LLM_URL))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + API_KEY)
+                    .header("HTTP-Referer", "https://t.me/its_random_bot")  // ✅ Рекомендуется
+                    .header("X-Title", "TgBot")                             // ✅ Рекомендуется
                     .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(req)))
                     .build();
 
@@ -250,11 +264,11 @@ public class TgBotApplication extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        System.out.println("💬 UPDATE #" + update.getUpdateId());  // ✅ ЛОГ
+        System.out.println("💬 UPDATE #" + update.getUpdateId());
         if (!update.hasMessage() || update.getMessage().getText() == null) return;
 
         long chatId = update.getMessage().getChatId();
-        System.out.println("🔍 Chat=" + chatId + " Text='" + update.getMessage().getText() + "'");  // ✅ ЛОГ
+        System.out.println("🔍 Chat=" + chatId + " Text='" + update.getMessage().getText() + "'");
 
         String reply = processMessage(update, chatId);
         if (reply.isEmpty()) return;
@@ -269,7 +283,6 @@ public class TgBotApplication extends TelegramLongPollingBot {
     }
 
     private String processMessage(Update update, long chatId) {
-
         System.out.println("🔍 ОБРАБОТКА: " + chatId);
 
         Message msg = update.getMessage();
@@ -305,10 +318,10 @@ public class TgBotApplication extends TelegramLongPollingBot {
 
     public static void main(String[] args) {
         System.out.println("🔥 MAIN Args=" + args.length + ": " + java.util.Arrays.toString(args));
-        if (args.length != 9) {
-            System.err.println("❌ Нужны 9 параметров!");
+        if (args.length != 10) {  // ✅ 10 параметров теперь
+            System.err.println("❌ Нужны 10 параметров! BOT_TOKEN LLM_URL API_KEY MODEL PROVIDER NAME DESCRIPTION TEMP TOP_P HISTORY_LIMIT");
             return;
         }
-        new TgBotApplication(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8]);
+        new TgBotApplication(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9]);
     }
 }
