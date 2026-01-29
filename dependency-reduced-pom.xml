@@ -18,7 +18,7 @@
             <configuration>
               <transformers>
                 <transformer>
-                  <mainClass>com.example.sharipov.tgbot.TgBotApplication</mainClass>
+                  <mainClass>com.example.sharipov.tgbot.Main</mainClass>
                 </transformer>
               </transformers>
             </configuration>
