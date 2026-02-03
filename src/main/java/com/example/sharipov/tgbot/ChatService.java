@@ -15,14 +15,15 @@ public class ChatService {
     private final ChatHistoryRepository repo;
     private final RouterClient client;
 
-    private final String model;
-    private final String providerOnly;      // может быть пустым
-    private final String systemDescription; // system prompt
-    private final double temperature;
-    private final double topP;
-
-    private final int contextHistoryLimit;  // сколько сообщений уходит в LLM
-    private final int dbKeepLimit;          // сколько сообщений оставляем в БД
+    // 🔥 УБРАНЫ final — теперь динамические
+    private String model;
+    private String providerOnly;
+    private String systemDescription;
+    private double temperature;
+    private double topP;
+    private int maxTokens;
+    private final int contextHistoryLimit;
+    private final int dbKeepLimit;
 
     public ChatService(ChatHistoryRepository repo,
                        RouterClient client,
@@ -31,6 +32,7 @@ public class ChatService {
                        String systemDescription,
                        double temperature,
                        double topP,
+                       int maxTokens,
                        int contextHistoryLimit,
                        int dbKeepLimit) {
 
@@ -41,8 +43,48 @@ public class ChatService {
         this.systemDescription = systemDescription;
         this.temperature = temperature;
         this.topP = topP;
+        this.maxTokens = maxTokens;
         this.contextHistoryLimit = contextHistoryLimit;
         this.dbKeepLimit = dbKeepLimit;
+    }
+
+    // 🔥 GETTERS
+    public String getSystemDescription() { return systemDescription; }
+    public String getModel() { return model; }
+    public String getProviderOnly() { return providerOnly; }
+    public double getTemperature() { return temperature; }
+    public double getTopP() { return topP; }
+    public int getMaxTokens() { return maxTokens; }
+
+    // 🔥 SETTERS ДЛЯ ДИНАМИЧЕСКИХ НАСТРОЕК
+    public void setModel(String model) {
+        this.model = model;
+        System.out.println("🔧 Модель изменена на: " + model);
+    }
+
+    public void setProvider(String providerOnly) {
+        this.providerOnly = providerOnly;
+        System.out.println("🔧 Провайдер изменён на: " + (providerOnly.isBlank() ? "любой" : providerOnly));
+    }
+
+    public void setSystemDescription(String systemDescription) {
+        this.systemDescription = systemDescription;
+        System.out.println("🔧 System prompt обновлён");
+    }
+
+    public void setTemperature(double temperature) {
+        this.temperature = temperature;
+        System.out.println("🔧 Температура изменена на: " + temperature);
+    }
+
+    public void setTopP(double topP) {
+        this.topP = topP;
+        System.out.println("🔧 Top P изменён на: " + topP);
+    }
+
+    public void setMaxTokens(int maxTokens) {
+        this.maxTokens = maxTokens;
+        System.out.println("🔧 Макс. токены: " + maxTokens);
     }
 
     public String reply(long chatId, String userText) {
@@ -71,6 +113,7 @@ public class ChatService {
             JsonObject options = new JsonObject();
             options.addProperty("temperature", temperature);
             options.addProperty("top_p", topP);
+            options.addProperty("max_tokens", maxTokens);
             req.add("options", options);
 
             if (providerOnly != null && !providerOnly.isBlank()) {
@@ -81,8 +124,8 @@ public class ChatService {
                 req.add("provider", provider);
             }
 
-            System.out.printf("%s [CHAT] reqId=%s chatId=%d hist=%d userLen=%d%n",
-                    Instant.now(), reqId, chatId, history.size(), userText.length());
+            System.out.printf("%s [CHAT] reqId=%s chatId=%d hist=%d userLen=%d model=%s maxTokens=%d%n",
+                    Instant.now(), reqId, chatId, history.size(), userText.length(), model, maxTokens);
 
             String respBody = client.chat(req, Duration.ofSeconds(120));
             String assistantText = parseAssistant(respBody);
